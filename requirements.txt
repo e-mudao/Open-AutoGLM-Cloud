@@ -1,14 +1,16 @@
-Pillow>=12.0.0
-openai>=2.9.0
+# --- Core Dependencies ---
+# 用于连接智谱 GLM-4.6v (OpenAI 兼容接口)
+openai>=1.0.0
+httpx
 
-# For Model Deployment
+# --- Image Processing ---
+# 用于截图处理、压缩和格式转换
+Pillow>=10.0.0
 
-# sglang>=0.5.6.post1
-# transformers>=5.0.0rc0
-# vllm>=0.12.0
-
-# Optional: for development
-# pytest>=7.0.0
-# pre-commit>=4.5.0
-# black>=23.0.0
-# mypy>=1.0.0
+# --- Utilities ---
+# 基础工具库 (保留原项目中可能用到的轻量级依赖)
+numpy
+tqdm
+requests
+typing_extensions
+colorama
