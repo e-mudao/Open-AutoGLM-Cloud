@@ -10,9 +10,9 @@
 
 **Open-AutoGLM-Cloud** 是 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 的轻量化云端适配版本。
 
-原项目依赖 `AutoGLM-Phone-9B` 模型，而本项目将其核心推理引擎替换为 **智谱 AI 的 GLM-4.6v 云端 API**。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
+原项目依赖强大的本地 GPU 资源来部署 `AutoGLM-Phone-9B` 模型，而本项目将其核心推理引擎替换为 **智谱 AI 的 GLM-4.6v 云端 API**。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
 
-本项目保留了原版的规划与控制能力，并针对云端场景进行了深度优化：
+本项目保留了原版强大的规划与控制能力，并针对云端场景进行了深度优化：
 - 🧠 **支持 Native Thinking**：开启 GLM-4.6v 的深度思考模式，处理复杂长链条任务。
 - 📱 **完美分辨率适配**：重构坐标系统，自动适配任意分辨率（针对 720x1604 等设备进行了深度测试），解决点击偏移问题。
 - 👆 **拟人化操作**：底层增加随机抖动（Jitter）机制，有效防止误触状态栏或点击死像素点。
@@ -61,3 +61,82 @@
 ```bash
 pip install -r requirements.txt 
 pip install -e .
+```
+
+### 2. 设置 API Key
+
+在终端中设置环境变量（或将其写入 `~/.zshrc` / `~/.bashrc`）：
+
+```bash
+export ZHIPUAI_API_KEY="你的_API_Key_粘贴在这里"
+```
+
+### 3. 连接手机
+
+使用 USB 连接手机，并确认设备已连接：
+
+```bash
+adb devices
+# 应显示：List of devices attached
+# xxxxxxxx   device
+```
+
+### 4. 运行 Agent
+
+直接运行 `main.py` 即可开始：
+
+```bash
+# 交互模式（推荐）
+python main.py
+
+# 单次任务模式
+python main.py "打开小红书搜索智谱，给前三个帖子点赞"
+
+# 查看支持的应用列表
+python main.py --list-apps
+```
+
+## 配置说明
+
+### 环境变量
+
+| 变量 | 描述 | 默认值 |
+| :--- | :--- | :--- |
+| `ZHIPUAI_API_KEY` | **(必填)** 智谱 API Key | 无 |
+| `PHONE_AGENT_MODEL` | 使用的模型名称 | `glm-4.6v` |
+| `PHONE_AGENT_BASE_URL` | API 地址 | `https://open.bigmodel.cn/api/paas/v4/` |
+
+### 配置文件
+
+主要配置文件位于 `phone_agent/config/`：
+- `prompts.py`: 系统提示词（System Prompt）。
+- `apps.py`: 支持的应用包名映射。
+
+## 远程调试
+
+支持通过 WiFi 控制设备：
+
+1. **开启无线调试**：确保手机和电脑在同一 WiFi。
+2. **连接设备**：
+   ```bash
+   adb connect 192.168.1.XX:5555
+   ```
+3. **运行脚本**：
+   ```bash
+   python main.py "你的任务"
+   ```
+
+## 常见问题
+
+**Q: 为什么一直卡在“正在发送请求”？**
+A: 请检查网络连接。如果是第一次运行，Thinking 模式可能需要较长推理时间（10-30秒）。代码中已内置图片压缩，通常速度很快。
+
+**Q: 为什么点不到按钮（一直在同一个位置空点）？**
+A: 本项目已修复了坐标映射问题并增加了随机抖动。如果仍然点不准，请检查 `phone_agent/adb/device.py` 中的 `DEVICE_WIDTH` 和 `DEVICE_HEIGHT` 是否与您的手机实际分辨率匹配（默认适配 720x1604，其他比例自动兼容，但若差异巨大可手动修改）。
+
+**Q: 报错 `ValueError: Failed to parse action`**
+A: 这是因为模型输出了非标准格式。最新的代码已内置鲁棒解析器，能自动提取混乱文本中的 `do()` 指令。请确保使用了最新的 `client.py`。
+
+## 致谢与引用
+
+本项目 Fork 自 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM)，感谢原作者团队的开源贡献。
