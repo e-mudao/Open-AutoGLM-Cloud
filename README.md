@@ -6,7 +6,7 @@
 
 **Open-AutoGLM-Cloud** 是 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 的轻量化云端适配版本。
 
-原项目依赖强大的本地 GPU 资源来部署 `AutoGLM-Phone-9B` 模型，而本项目将其核心推理引擎替换为 **智谱 AI 的 GLM-4.6v 云端 API**。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
+原项目依赖 `AutoGLM-Phone-9B` 模型，本项目将其核心推理引擎替换为 **智谱 AI 的 GLM-4.6v 云端 API**。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
 
 本项目保留了原版强大的规划与控制能力，并针对云端场景进行了深度优化：
 - 🧠 **支持 Native Thinking**：开启 GLM-4.6v 的深度思考模式，处理复杂长链条任务。
@@ -24,7 +24,6 @@
 | **模型部署** | 本地 vLLM / SGLang | **无需部署 (直接调用 API)** |
 | **模型** | AutoGLM-Phone-9B | **GLM-4.6v (Thinking Enabled)** |
 | **安装体积** | 数百 GB | **< 100 MB** |
-| **分辨率适配** | 需模型微调或特定分辨率 | **自动适配任意分辨率** |
 
 ## 环境准备
 
@@ -86,10 +85,8 @@ adb devices
 python main.py
 
 # 单次任务模式
-python main.py "打开小红书搜索智谱，给前三个帖子点赞"
+python main.py "打开小红书搜索智谱用户，给前三个帖子点赞"
 
-# 查看支持的应用列表
-python main.py --list-apps
 ```
 
 ## 配置说明
@@ -121,17 +118,6 @@ python main.py --list-apps
    ```bash
    python main.py "你的任务"
    ```
-
-## 常见问题
-
-**Q: 为什么一直卡在“正在发送请求”？**
-A: 请检查网络连接。如果是第一次运行，Thinking 模式可能需要较长推理时间（10-30秒）。代码中已内置图片压缩，通常速度很快。
-
-**Q: 为什么点不到按钮（一直在同一个位置空点）？**
-A: 本项目已修复了坐标映射问题并增加了随机抖动。如果仍然点不准，请检查 `phone_agent/adb/device.py` 中的 `DEVICE_WIDTH` 和 `DEVICE_HEIGHT` 是否与您的手机实际分辨率匹配
-
-**Q: 报错 `ValueError: Failed to parse action`**
-A: 这是因为模型输出了非标准格式。最新的代码已内置鲁棒解析器，能自动提取混乱文本中的 `do()` 指令。请确保使用了最新的 `client.py`。
 
 ## 致谢与引用
 
