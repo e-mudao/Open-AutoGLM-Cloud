@@ -2,10 +2,6 @@
 
 [Read this in English.](./README_en.md)
 
-<div align="center">
-<img src=resources/logo.svg width="20%"/>
-</div>
-
 ## 项目介绍
 
 **Open-AutoGLM-Cloud** 是 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 的轻量化云端适配版本。
@@ -14,7 +10,7 @@
 
 本项目保留了原版强大的规划与控制能力，并针对云端场景进行了深度优化：
 - 🧠 **支持 Native Thinking**：开启 GLM-4.6v 的深度思考模式，处理复杂长链条任务。
-- 📱 **完美分辨率适配**：重构坐标系统，自动适配任意分辨率（针对 720x1604 等设备进行了深度测试），解决点击偏移问题。
+- 📱 **完美分辨率适配**：重构坐标系统，自动适配任意分辨率，解决点击偏移问题。
 - 👆 **拟人化操作**：底层增加随机抖动（Jitter）机制，有效防止误触状态栏或点击死像素点。
 - 🚀 **极速响应**：内置智能图片压缩策略，显著降低 API 延迟。
 
@@ -132,7 +128,7 @@ python main.py --list-apps
 A: 请检查网络连接。如果是第一次运行，Thinking 模式可能需要较长推理时间（10-30秒）。代码中已内置图片压缩，通常速度很快。
 
 **Q: 为什么点不到按钮（一直在同一个位置空点）？**
-A: 本项目已修复了坐标映射问题并增加了随机抖动。如果仍然点不准，请检查 `phone_agent/adb/device.py` 中的 `DEVICE_WIDTH` 和 `DEVICE_HEIGHT` 是否与您的手机实际分辨率匹配（默认适配 720x1604，其他比例自动兼容，但若差异巨大可手动修改）。
+A: 本项目已修复了坐标映射问题并增加了随机抖动。如果仍然点不准，请检查 `phone_agent/adb/device.py` 中的 `DEVICE_WIDTH` 和 `DEVICE_HEIGHT` 是否与您的手机实际分辨率匹配
 
 **Q: 报错 `ValueError: Failed to parse action`**
 A: 这是因为模型输出了非标准格式。最新的代码已内置鲁棒解析器，能自动提取混乱文本中的 `do()` 指令。请确保使用了最新的 `client.py`。
