@@ -1,6 +1,8 @@
 """Action handler for processing AI model outputs."""
 
 import time
+import re
+import ast  # 🎯 核心修复：引入 AST 用于解析字符串列表
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -18,28 +20,14 @@ from phone_agent.adb import (
     type_text,
 )
 
-
 @dataclass
 class ActionResult:
-    """Result of an action execution."""
-
     success: bool
     should_finish: bool
     message: str | None = None
     requires_confirmation: bool = False
 
-
 class ActionHandler:
-    """
-    Handles execution of actions from AI model output.
-
-    Args:
-        device_id: Optional ADB device ID for multi-device setups.
-        confirmation_callback: Optional callback for sensitive action confirmation.
-            Should return True to proceed, False to cancel.
-        takeover_callback: Optional callback for takeover requests (login, captcha).
-    """
-
     def __init__(
         self,
         device_id: str | None = None,
@@ -53,50 +41,29 @@ class ActionHandler:
     def execute(
         self, action: dict[str, Any], screen_width: int, screen_height: int
     ) -> ActionResult:
-        """
-        Execute an action from the AI model.
-
-        Args:
-            action: The action dictionary from the model.
-            screen_width: Current screen width in pixels.
-            screen_height: Current screen height in pixels.
-
-        Returns:
-            ActionResult indicating success and whether to finish.
-        """
+        """Execute the action and handle exceptions gracefully."""
         action_type = action.get("_metadata")
 
         if action_type == "finish":
-            return ActionResult(
-                success=True, should_finish=True, message=action.get("message")
-            )
+            return ActionResult(True, True, message=action.get("message"))
 
         if action_type != "do":
-            return ActionResult(
-                success=False,
-                should_finish=True,
-                message=f"Unknown action type: {action_type}",
-            )
+            return ActionResult(False, True, message=f"Unknown action type: {action_type}")
 
         action_name = action.get("action")
         handler_method = self._get_handler(action_name)
 
         if handler_method is None:
-            return ActionResult(
-                success=False,
-                should_finish=False,
-                message=f"Unknown action: {action_name}",
-            )
+            return ActionResult(False, False, message=f"Unknown action: {action_name}")
 
         try:
             return handler_method(action, screen_width, screen_height)
         except Exception as e:
-            return ActionResult(
-                success=False, should_finish=False, message=f"Action failed: {e}"
-            )
+            # 🎯 关键修复：打印详细错误堆栈，防止静默失败
+            print(f"❌ Action Execution Error: {e}")
+            return ActionResult(False, False, message=f"Action failed: {str(e)}")
 
     def _get_handler(self, action_name: str) -> Callable | None:
-        """Get the handler method for an action."""
         handlers = {
             "Launch": self._handle_launch,
             "Tap": self._handle_tap,
@@ -116,15 +83,37 @@ class ActionHandler:
         return handlers.get(action_name)
 
     def _convert_relative_to_absolute(
-        self, element: list[int], screen_width: int, screen_height: int
+        self, element: Any, screen_width: int, screen_height: int
     ) -> tuple[int, int]:
-        """Convert relative coordinates (0-1000) to absolute pixels."""
-        x = int(element[0] / 1000 * screen_width)
-        y = int(element[1] / 1000 * screen_height)
+        """
+        Convert relative coordinates (0-1000) to absolute pixels.
+        Robustly handles string inputs like "[899, 55]".
+        """
+        # 🎯 关键修复：如果传入的是字符串，先解析成列表
+        if isinstance(element, str):
+            element = element.strip()
+            try:
+                # 尝试用 AST 安全解析 "[x, y]"
+                element = ast.literal_eval(element)
+            except Exception:
+                # 兜底：简单的正则提取数字
+                nums = re.findall(r"\d+", element)
+                if len(nums) >= 2:
+                    element = [int(nums[0]), int(nums[1])]
+        
+        # 类型检查
+        if not isinstance(element, (list, tuple)) or len(element) < 2:
+            raise ValueError(f"Invalid element format: {element}")
+        
+        # 转换逻辑：归一化(0-1000) -> 像素
+        x_ratio = float(element[0])
+        y_ratio = float(element[1])
+        
+        x = int(x_ratio / 1000.0 * screen_width)
+        y = int(y_ratio / 1000.0 * screen_height)
         return x, y
 
     def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle app launch action."""
         app_name = action.get("app")
         if not app_name:
             return ActionResult(False, False, "No app name specified")
@@ -135,173 +124,115 @@ class ActionHandler:
         return ActionResult(False, False, f"App not found: {app_name}")
 
     def _handle_tap(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle tap action."""
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
+        # 1. 坐标转换 (0-1000 -> Pixel)
         x, y = self._convert_relative_to_absolute(element, width, height)
 
-        # Check for sensitive operation
+        # 2. 敏感操作确认
         if "message" in action:
             if not self.confirmation_callback(action["message"]):
-                return ActionResult(
-                    success=False,
-                    should_finish=True,
-                    message="User cancelled sensitive operation",
-                )
+                return ActionResult(False, True, "User cancelled sensitive operation")
 
+        # 3. 执行点击 (传入的是像素坐标)
         tap(x, y, self.device_id)
         return ActionResult(True, False)
 
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle text input action."""
         text = action.get("text", "")
-
-        # Switch to ADB keyboard
         original_ime = detect_and_set_adb_keyboard(self.device_id)
-        time.sleep(1.0)
-
-        # Clear existing text and type new text
+        time.sleep(0.5)
         clear_text(self.device_id)
-        time.sleep(1.0)
-
+        time.sleep(0.5)
         type_text(text, self.device_id)
-        time.sleep(1.0)
-
-        # Restore original keyboard
+        time.sleep(0.5)
         restore_keyboard(original_ime, self.device_id)
-        time.sleep(1.0)
-
         return ActionResult(True, False)
 
     def _handle_swipe(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle swipe action."""
         start = action.get("start")
         end = action.get("end")
-
-        if not start or not end:
-            return ActionResult(False, False, "Missing swipe coordinates")
+        if not start or not end: return ActionResult(False, False, "Missing coordinates")
 
         start_x, start_y = self._convert_relative_to_absolute(start, width, height)
         end_x, end_y = self._convert_relative_to_absolute(end, width, height)
-
         swipe(start_x, start_y, end_x, end_y, device_id=self.device_id)
         return ActionResult(True, False)
 
     def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle back button action."""
         back(self.device_id)
         return ActionResult(True, False)
 
     def _handle_home(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle home button action."""
         home(self.device_id)
         return ActionResult(True, False)
 
     def _handle_double_tap(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle double tap action."""
         element = action.get("element")
-        if not element:
-            return ActionResult(False, False, "No element coordinates")
-
+        if not element: return ActionResult(False, False, "No element")
         x, y = self._convert_relative_to_absolute(element, width, height)
         double_tap(x, y, self.device_id)
         return ActionResult(True, False)
 
     def _handle_long_press(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle long press action."""
         element = action.get("element")
-        if not element:
-            return ActionResult(False, False, "No element coordinates")
-
+        if not element: return ActionResult(False, False, "No element")
         x, y = self._convert_relative_to_absolute(element, width, height)
         long_press(x, y, device_id=self.device_id)
         return ActionResult(True, False)
 
     def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle wait action."""
-        duration_str = action.get("duration", "1 seconds")
         try:
-            duration = float(duration_str.replace("seconds", "").strip())
-        except ValueError:
-            duration = 1.0
-
-        time.sleep(duration)
+            val = str(action.get("duration", "1")).replace("seconds", "").strip()
+            time.sleep(float(val))
+        except:
+            time.sleep(1.0)
         return ActionResult(True, False)
 
     def _handle_takeover(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle takeover request (login, captcha, etc.)."""
-        message = action.get("message", "User intervention required")
-        self.takeover_callback(message)
+        self.takeover_callback(action.get("message", "Intervention required"))
         return ActionResult(True, False)
 
     def _handle_note(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle note action (placeholder for content recording)."""
-        # This action is typically used for recording page content
-        # Implementation depends on specific requirements
         return ActionResult(True, False)
 
     def _handle_call_api(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle API call action (placeholder for summarization)."""
-        # This action is typically used for content summarization
-        # Implementation depends on specific requirements
         return ActionResult(True, False)
 
     def _handle_interact(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle interaction request (user choice needed)."""
-        # This action signals that user input is needed
-        return ActionResult(True, False, message="User interaction required")
+        return ActionResult(True, False, message="Interaction required")
 
     @staticmethod
     def _default_confirmation(message: str) -> bool:
-        """Default confirmation callback using console input."""
-        response = input(f"Sensitive operation: {message}\nConfirm? (Y/N): ")
-        return response.upper() == "Y"
+        return input(f"⚠️ Confirm {message}? (y/n): ").lower() == 'y'
 
     @staticmethod
     def _default_takeover(message: str) -> None:
-        """Default takeover callback using console input."""
-        input(f"{message}\nPress Enter after completing manual operation...")
+        input(f"✋ {message} (Press Enter when done)")
 
-
-def parse_action(response: str) -> dict[str, Any]:
-    """
-    Parse action from model response.
-
-    Args:
-        response: Raw response string from the model.
-
-    Returns:
-        Parsed action dictionary.
-
-    Raises:
-        ValueError: If the response cannot be parsed.
-    """
-    try:
-        # Try to evaluate as Python dict/function call
-        response = response.strip()
-        if response.startswith("do"):
-            action = eval(response)
-        elif response.startswith("finish"):
-            action = {
-                "_metadata": "finish",
-                "message": response.replace("finish(message=", "")[1:-2],
-            }
-        else:
-            raise ValueError(f"Failed to parse action: {response}")
-        return action
-    except Exception as e:
-        raise ValueError(f"Failed to parse action: {e}")
-
-
+# --- Helper Functions for eval() environment ---
 def do(**kwargs) -> dict[str, Any]:
-    """Helper function for creating 'do' actions."""
     kwargs["_metadata"] = "do"
     return kwargs
 
-
 def finish(**kwargs) -> dict[str, Any]:
-    """Helper function for creating 'finish' actions."""
     kwargs["_metadata"] = "finish"
     return kwargs
+
+def parse_action(response: str) -> dict[str, Any]:
+    """Parse action string safely."""
+    try:
+        response = response.strip()
+        context = {"do": do, "finish": finish}
+        # Use eval with restricted scope
+        action = eval(response, {"__builtins__": None}, context)
+        if isinstance(action, dict) and "_metadata" in action:
+            return action
+        raise ValueError("Result is not a dict")
+    except Exception as e:
+        # Fallback for simple finish
+        if "finish" in response:
+             return {"_metadata": "finish", "message": "Task Completed"}
+        raise ValueError(f"Parse failed: {e}")
