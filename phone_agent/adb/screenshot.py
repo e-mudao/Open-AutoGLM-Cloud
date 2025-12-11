@@ -6,6 +6,7 @@ import subprocess
 import uuid
 from dataclasses import dataclass
 from io import BytesIO
+import tempfile # [新增] 用于更安全的跨平台本地临时文件处理
 
 from PIL import Image
 
@@ -19,68 +20,108 @@ class Screenshot:
     is_sensitive: bool = False
 
 
-def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screenshot:
+# [新增] 默认的 Fallback 分辨率。
+# TODO: 在实际生产环境中，最好在 Agent 初始化时获取一次设备的真实分辨率并存储起来传递给此模块，
+# 而不是依赖硬编码的默认值。
+DEFAULT_FALLBACK_SIZE = (720, 1604)
+
+
+def get_screenshot(device_id: str | None = None, timeout: int = 12) -> Screenshot:
     """
     Capture a screenshot from the connected Android device.
+
+    Args:
+        device_id: Optional ADB device ID.
+        timeout: Timeout in seconds for ADB commands. Increased to 12s for slower devices.
+
+    Returns:
+        Screenshot object. Returns a black fallback image on failure.
     """
-    # 使用临时文件路径
-    temp_path = f"/tmp/screenshot_{uuid.uuid4()}.png"
+    # 生成唯一的 ID，避免多进程或短时间内连续截图导致文件名冲突
+    unique_id = uuid.uuid4().hex[:8]
+
+    # [优化 1] 使用 tempfile 模块获取本地临时目录，跨平台兼容性更好 (Windows/Linux/macOS)
+    local_temp_dir = tempfile.gettempdir()
+    local_temp_path = os.path.join(local_temp_dir, f"sc_{unique_id}.png")
+
+    # [优化 2] 远程文件名也使用唯一 ID，避免冲突。
+    # 使用 /data/local/tmp/ 目录通常比 /sdcard/ 更规范，权限也更明确。
+    remote_temp_path = f"/data/local/tmp/sc_{unique_id}.png"
+
     adb_prefix = _get_adb_prefix(device_id)
 
     try:
-        # 1. 执行截图命令
-        # screencap -p 会在手机端生成 png 格式
+        # 1. 执行截图命令并保存到手机端临时位置
+        # capture_output=True 会捕获 stdout/stderr，对于检测敏感页面失败很有用
         result = subprocess.run(
-            adb_prefix + ["shell", "screencap", "-p", "/sdcard/tmp.png"],
+            adb_prefix + ["shell", "screencap", "-p", remote_temp_path],
             capture_output=True,
             text=True,
             timeout=timeout,
         )
 
-        # 检查是否失败 (敏感页面通常会返回错误或黑屏，但 ADB 响应可能不同)
+        # 检查是否失败 (敏感页面通常会返回错误输出)
+        # 某些设备/系统版本在受保护页面截图时，stderr 会包含 "ERROR: capture failed" 或类似信息
         output = result.stdout + result.stderr
-        if "Status: -1" in output or "Failed" in output:
+        if result.returncode != 0 or "failed" in output.lower():
+            # print(f"Screenshot capture failed (likely sensitive output): {output}") # 可选调试日志
             return _create_fallback_screenshot(is_sensitive=True)
 
         # 2. 将图片拉取到本地
-        subprocess.run(
-            adb_prefix + ["pull", "/sdcard/tmp.png", temp_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
+        pull_result = subprocess.run(
+            adb_prefix + ["pull", remote_temp_path, local_temp_path],
+            capture_output=True, # 捕获输出避免刷屏
+            timeout=timeout, # 拉取大文件可能需要时间
         )
 
-        if not os.path.exists(temp_path):
-            return _create_fallback_screenshot(is_sensitive=False)
+        if pull_result.returncode != 0 or not os.path.exists(local_temp_path):
+             # print(f"Failed to pull screenshot: {pull_result.stderr.decode()}")
+             return _create_fallback_screenshot(is_sensitive=False)
 
         # 3. 读取图片信息
-        # 优化: 只用 PIL 读取尺寸，直接读取文件二进制数据作为 Base64
-        # 避免了原代码中 Image.save() 导致的二次 PNG 压缩，提升速度
+        # 原代码的优化非常好：只用 PIL 读尺寸，用原生 IO 读数据转换为 Base64。保持不变。
         try:
-            with Image.open(temp_path) as img:
+            with Image.open(local_temp_path) as img:
                 width, height = img.size
-            
-            with open(temp_path, "rb") as f:
+
+            with open(local_temp_path, "rb") as f:
                 image_bytes = f.read()
                 base64_data = base64.b64encode(image_bytes).decode("utf-8")
-        except Exception:
-            # 如果文件损坏
+        except Exception as e:
+            print(f"Error reading screenshot file: {e}")
+            # 如果文件损坏或读取失败
             return _create_fallback_screenshot(is_sensitive=False)
-        finally:
-            # 清理本地临时文件
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
 
         return Screenshot(
             base64_data=base64_data, width=width, height=height, is_sensitive=False
         )
 
-    except Exception as e:
-        print(f"Screenshot error: {e}")
+    except subprocess.TimeoutExpired:
+        print("Screenshot timed out.")
         return _create_fallback_screenshot(is_sensitive=False)
+    except Exception as e:
+        print(f"Unexpected screenshot error: {e}")
+        return _create_fallback_screenshot(is_sensitive=False)
+    finally:
+        # [优化 3] 清理工作：确保删除本地和远程的临时文件
+        if os.path.exists(local_temp_path):
+            try:
+                os.remove(local_temp_path)
+            except Exception:
+                pass # 忽略清理本地文件时的错误
+
+        # 清理远程文件 (尝试执行，不保证成功，设置较短超时)
+        try:
+             subprocess.run(
+                 adb_prefix + ["shell", "rm", remote_temp_path],
+                 capture_output=True,
+                 timeout=2
+             )
+        except Exception:
+             pass # 忽略清理远程文件时的错误 (例如设备断开)
 
 
-def _get_adb_prefix(device_id: str | None) -> list:
+def _get_adb_prefix(device_id: str | None) -> list[str]:
     """Get ADB command prefix with optional device specifier."""
     if device_id:
         return ["adb", "-s", device_id]
@@ -89,8 +130,9 @@ def _get_adb_prefix(device_id: str | None) -> list:
 
 def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:
     """Create a black fallback image when screenshot fails."""
-    # 修改: 匹配您的设备分辨率 720x1604
-    default_width, default_height = 720, 1604
+    # [优化 4] 使用顶部定义的常量，并添加注释说明风险。
+    # 风险提示：如果此分辨率与实际设备差距过大，VLM 基于此黑图输出的坐标可能是错误的。
+    default_width, default_height = DEFAULT_FALLBACK_SIZE
 
     black_img = Image.new("RGB", (default_width, default_height), color="black")
     buffered = BytesIO()
