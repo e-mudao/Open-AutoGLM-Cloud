@@ -7,11 +7,11 @@
 
 **Open-AutoGLM-Cloud** is a lightweight, cloud-native fork of [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM).
 
-The original project relies on heavy local GPU resources to deploy the `AutoGLM-Phone-9B` model. This fork replaces the core inference engine with **Zhipu AI's GLM-4.6v Cloud API**. This allows you to run this powerful mobile agent on any standard computer (e.g., MacBook Air, Windows Laptop) without installing heavy dependencies like vLLM or PyTorch, and without downloading hundreds of GBs of model weights.
+The original project relies on heavy local GPU resources to deploy the `AutoGLM-Phone-9B` model. This fork replaces the core inference engine with **Zhipu AI's AutoGLM-Phone Cloud API**. This allows you to run this powerful mobile agent on any standard computer (e.g., MacBook Air, Windows Laptop) without installing heavy dependencies like vLLM or PyTorch, and without downloading hundreds of GBs of model weights.
 
 This project retains the powerful planning and control capabilities of the original while being deeply optimized for cloud scenarios:
 
-- 🧠 **Native Thinking Support**: Enables GLM-4.6v's deep reasoning mode to handle complex, long-chain tasks.
+- 🧠 **Native Thinking Support**: Enables AutoGLM-Phone's deep reasoning mode to handle complex, long-chain tasks.
 - 📱 **Auto Resolution Adaptation**: Reconstructed coordinate system that automatically detects and adapts to any screen resolution (fixing click offset issues on non-standard devices).
 - 👆 **Human-like Interaction**: Implements a random "Jitter" mechanism in the underlying driver to prevent mis-clicks on the status bar or dead pixels.
 - 🚀 **Fast Response**: Built-in intelligent image compression strategy to significantly reduce API latency.
@@ -25,7 +25,7 @@ This project retains the powerful planning and control capabilities of the origi
 | :--- | :--- | :--- |
 | **Hardware** | High-end GPU (24GB+ VRAM) | **Any Computer (No GPU req.)** |
 | **Deployment** | Local vLLM / SGLang | **Zero Deployment (API Call)** |
-| **Model** | AutoGLM-Phone-9B | **GLM-4.6v (Thinking Enabled)** |
+| **Model** | AutoGLM-Phone-9B | **AutoGLM-Phone (Thinking Enabled)** |
 | **Size** | 100 GB+ | **< 100 MB** |
 
 ## Prerequisites
@@ -103,7 +103,7 @@ python main.py --list-apps
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `ZHIPUAI_API_KEY` | **(Required)** Zhipu API Key | None |
-| `PHONE_AGENT_MODEL` | Model Name | `glm-4.6v` |
+| `PHONE_AGENT_MODEL` | Model Name | `autoglm-phone` |
 | `PHONE_AGENT_BASE_URL` | API Endpoint | `https://open.bigmodel.cn/api/paas/v4/` |
 
 ### Config Files

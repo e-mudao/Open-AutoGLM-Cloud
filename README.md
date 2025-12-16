@@ -6,10 +6,10 @@
 
 **Open-AutoGLM-Cloud** 是 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 的轻量化云端适配版本。
 
-原项目依赖 `AutoGLM-Phone-9B` 模型，本项目将其核心推理引擎替换为 **智谱 AI 的 GLM-4.6v 云端 API**。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
+原项目缺省依赖vLLM推理和本地的 `AutoGLM-Phone-9B` 模型，本项目将其核心推理引擎替换为 **智谱 AI 的 AutoGLM-Phone 云端 API**（用GLM-4.6V感觉效果也可以）。这意味着你可以在任何普通电脑（如 MacBook Air、Windows 笔记本）上运行这一强大的手机智能体，无需安装 vLLM、PyTorch 等重型依赖，也无需下载数百 GB 的模型权重。
 
 本项目保留了原版强大的规划与控制能力，并针对云端场景进行了深度优化：
-- 🧠 **支持 Native Thinking**：开启 GLM-4.6v 的深度思考模式，处理复杂长链条任务。
+- 🧠 **支持 Native Thinking**：开启 深度思考模式，处理复杂长链条任务。
 - 📱 **完美分辨率适配**：重构坐标系统，自动适配任意分辨率，解决点击偏移问题。
 - 👆 **拟人化操作**：底层增加随机抖动（Jitter）机制，有效防止误触状态栏或点击死像素点。
 - 🚀 **极速响应**：内置智能图片压缩策略，显著降低 API 延迟。
@@ -22,7 +22,7 @@
 | :--- | :--- | :--- |
 | **硬件要求** | 需要高端显卡 (24GB+ VRAM) | **任意电脑 (无 GPU 要求)** |
 | **模型部署** | 本地 vLLM / SGLang | **无需部署 (直接调用 API)** |
-| **模型** | AutoGLM-Phone-9B | **GLM-4.6v (Thinking Enabled)** |
+| **模型** | AutoGLM-Phone-9B | **云端AutoGLM-Phone-9B ** |
 | **安装体积** | 数百 GB | **< 100 MB** |
 
 ## 环境准备
@@ -96,7 +96,7 @@ python main.py "打开小红书搜索智谱用户，给前三个帖子点赞"
 | 变量 | 描述 | 默认值 |
 | :--- | :--- | :--- |
 | `ZHIPUAI_API_KEY` | **(必填)** 智谱 API Key | 无 |
-| `PHONE_AGENT_MODEL` | 使用的模型名称 | `glm-4.6v` |
+| `PHONE_AGENT_MODEL` | 使用的模型名称 | `autoglm-phone` |
 | `PHONE_AGENT_BASE_URL` | API 地址 | `https://open.bigmodel.cn/api/paas/v4/` |
 
 ### 配置文件

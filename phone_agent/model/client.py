@@ -19,7 +19,7 @@ class ModelConfig:
     api_key: str = os.getenv("ZHIPUAI_API_KEY", "")
     
     # Model Settings
-    model_name: str = "glm-4.6v"
+    model_name: str = "autoglm-phone"
     max_tokens: int = 4096
     temperature: float = 0.5  # Slightly higher for thinking models
     top_p: float = 0.85
